@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coffee Shop Orders Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          boxShadow: { soft: '0 10px 25px -10px rgba(0,0,0,0.25)' }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar { height: 10px; width: 10px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="max-w-7xl mx-auto p-4 sm:p-6">
+    <!-- Header -->
+    <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">☕ Coffee Shop Orders Dashboard</h1>
+        <p class="text-slate-500">Multi-item orders, CSV import, summary, alerts & smart assistant.</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="clearBtn" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100">Clear all</button>
+      </div>
+    </header>
+
+    <!-- Top Row: Summary + Smart Assistant -->
+    <section class="grid gap-4 md:grid-cols-3 mb-4">
+      <!-- Summary -->
+      <div class="md:col-span-2 bg-white rounded-2xl shadow-soft p-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-semibold">Today's Summary</h2>
+          <div class="text-xs text-slate-500">Auto-updates as you add/import/manage orders</div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+          <div class="rounded-xl border border-slate-200 p-3">
+            <p class="text-xs text-slate-500">Total Orders</p>
+            <p id="totalOrders" class="text-2xl font-bold">0</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 p-3">
+            <p class="text-xs text-slate-500">Ready</p>
+            <p id="readyCount" class="text-2xl font-bold text-emerald-700">0</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 p-3">
+            <p class="text-xs text-slate-500">Pending</p>
+            <p id="pendingCount" class="text-2xl font-bold text-amber-700">0</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 p-3">
+            <p class="text-xs text-slate-500">Revenue (₹)</p>
+            <p id="revenue" class="text-2xl font-bold">0</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart Assistant -->
+      <div class="bg-white rounded-2xl shadow-soft p-4">
+        <h2 class="font-semibold mb-2">Smart Assistant 💡</h2>
+        <ul id="assistantTips" class="list-disc pl-5 space-y-1 text-sm text-slate-700">
+          <li>Insights will appear as orders flow.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Alerts Panel -->
+    <section class="bg-white rounded-2xl shadow-soft p-4 mb-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold">Alerts Panel</h2>
+        <span id="alertCount" class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">0</span>
+      </div>
+      <div id="alertsList" class="mt-3 grid gap-2"></div>
+    </section>
+
+    <!-- CSV Import -->
+    <section class="bg-white rounded-2xl shadow-soft p-4 mb-4">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <h2 class="font-semibold">Import Orders from CSV</h2>
+        <a class="text-xs underline text-slate-500" href="#" id="downloadSample">Download sample CSV</a>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">Expected columns: <code>customer</code>, <code>items</code>, <code>payment</code>, <code>status</code> (optional), <code>createdAt</code> (optional ISO).<br/>Example items cell: <em>Latte x2; Croissant x1</em></p>
+      <div class="mt-3 flex items-center gap-3 flex-wrap">
+        <input id="csvFile" type="file" accept=".csv" class="block text-sm" />
+        <button id="importCsvBtn" class="px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Import CSV</button>
+      </div>
+      <div id="csvImportMsg" class="text-xs text-slate-500 mt-2"></div>
+    </section>
+
+    <!-- New Order Form (multi-item) -->
+    <section class="bg-white rounded-2xl shadow-soft p-4 mb-4">
+      <h2 class="font-semibold mb-3">Add New Order</h2>
+      <form id="newOrderForm" class="grid gap-4">
+        <div class="grid gap-3 sm:grid-cols-3">
+          <input id="customerName" type="text" placeholder="Customer Name" required class="px-3 py-2 rounded-xl border border-slate-200" />
+          <select id="paymentSelect" class="px-3 py-2 rounded-xl border border-slate-200">
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
+            <option value="UPI">UPI</option>
+          </select>
+          <div class="hidden sm:block"></div>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-4 items-end">
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">Category</label>
+            <select id="categorySelect" class="w-full px-3 py-2 rounded-xl border border-slate-200">
+              <option value="drink">Drink</option>
+              <option value="pastry">Pastry</option>
+              <option value="snack">Snack</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-xs text-slate-500 mb-1">Item</label>
+            <select id="itemSelect" class="w-full px-3 py-2 rounded-xl border border-slate-200"></select>
+          </div>
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="block text-xs text-slate-500 mb-1">Qty</label>
+              <input id="qtyInput" type="number" min="1" value="1" class="w-full px-3 py-2 rounded-xl border border-slate-200" />
+            </div>
+            <button id="addItemBtn" type="button" class="self-end px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Add</button>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="font-medium mb-2">Items in this order</h3>
+          <div id="itemsEmpty" class="text-sm text-slate-500">No items yet — add from the selector above.</div>
+          <div id="itemsList" class="hidden overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-slate-500">
+                  <th class="py-2">Item</th>
+                  <th class="py-2">Qty</th>
+                  <th class="py-2">Price</th>
+                  <th class="py-2">Subtotal</th>
+                  <th class="py-2"></th>
+                </tr>
+              </thead>
+              <tbody id="itemsTbody"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" class="py-2 text-right font-semibold">Total</td>
+                  <td class="py-2 font-bold" id="orderTotalCell">₹0</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <button type="submit" class="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700">Add Order</button>
+      </form>
+    </section>
+
+    <!-- Orders -->
+    <section>
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-semibold">Live Orders</h2>
+        <div class="flex items-center gap-2 text-sm">
+          <input id="searchInput" type="text" placeholder="Search customer or item…" class="px-3 py-2 rounded-xl border border-slate-200 w-56" />
+          <select id="statusFilter" class="px-3 py-2 rounded-xl border border-slate-200">
+            <option value="all">All statuses</option>
+            <option value="waiting">Waiting</option>
+            <option value="in_progress">In Progress</option>
+            <option value="ready">Ready</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div id="ordersGrid" class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
+    </section>
+  </div>
+
+  <script>
+    // Catalog
+    const CATALOG = {
+      drink: [
+        { name: 'Espresso', price: 140, category: 'drink' },
+        { name: 'Americano', price: 160, category: 'drink' },
+        { name: 'Cappuccino', price: 200, category: 'drink' },
+        { name: 'Latte', price: 220, category: 'drink' },
+        { name: 'Mocha', price: 240, category: 'drink' },
+        { name: 'Cold Brew', price: 230, category: 'drink' },
+      ],
+      pastry: [
+        { name: 'Croissant', price: 120, category: 'pastry' },
+        { name: 'Blueberry Muffin', price: 110, category: 'pastry' },
+        { name: 'Chocolate Donut', price: 90, category: 'pastry' },
+        { name: 'Banana Bread', price: 130, category: 'pastry' },
+      ],
+      snack: [
+        { name: 'Veg Sandwich', price: 160, category: 'snack' },
+        { name: 'Grilled Paneer Wrap', price: 220, category: 'snack' },
+        { name: 'Cheese Garlic Toast', price: 150, category: 'snack' },
+        { name: 'Nachos', price: 140, category: 'snack' },
+      ],
+    };
+
+    const STATUS = { WAITING: 'waiting', IN_PROGRESS: 'in_progress', READY: 'ready', CANCELLED: 'cancelled' };
+
+    const STORE_KEY = 'coffee_orders_v3_multiitem_csv';
+    const rupee = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+
+    function uid(){ return Math.random().toString(36).slice(2,9) }
+    function now(){ return new Date().toISOString() }
+    function minsSince(ts){ return Math.floor((Date.now() - new Date(ts).getTime()) / 60000); }
+
+    // Build lookup for item name -> catalog entry
+    const NAME_LOOKUP = (()=>{
+      const m = new Map();
+      Object.values(CATALOG).flat().forEach(it => m.set(it.name.toLowerCase(), it));
+      return m;
+    })();
+
+    // Persistence
+    function loadOrders(){ try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch { return [] } }
+    function saveOrders(list){ localStorage.setItem(STORE_KEY, JSON.stringify(list)) }
+
+    let orders = loadOrders();
+
+    // New-order working cart
+    let cart = [];
+
+    // DOM refs (summary)
+    const totalOrdersEl = document.getElementById('totalOrders');
+    const readyCountEl = document.getElementById('readyCount');
+    const pendingCountEl = document.getElementById('pendingCount');
+    const revenueEl = document.getElementById('revenue');
+
+    // DOM refs (alerts/assistant)
+    const alertsListEl = document.getElementById('alertsList');
+    const alertCountEl = document.getElementById('alertCount');
+    const assistantTipsEl = document.getElementById('assistantTips');
+
+    // DOM refs (form/cart/orders)
+    const categorySelect = document.getElementById('categorySelect');
+    const itemSelect = document.getElementById('itemSelect');
+    const qtyInput = document.getElementById('qtyInput');
+    const itemsEmpty = document.getElementById('itemsEmpty');
+    const itemsList = document.getElementById('itemsList');
+    const itemsTbody = document.getElementById('itemsTbody');
+    const orderTotalCell = document.getElementById('orderTotalCell');
+    const ordersGrid = document.getElementById('ordersGrid');
+    const searchInputEl = document.getElementById('searchInput');
+    const statusFilterEl = document.getElementById('statusFilter');
+
+    /******** Catalog UI ********/
+    function populateItems(){
+      const cat = categorySelect.value;
+      const list = CATALOG[cat];
+      itemSelect.innerHTML = list.map((it, idx)=>`<option value="${idx}">${it.name} — ${rupee.format(it.price).replace('₹\u00A0','')}</option>`).join('');
+    }
+    populateItems();
+    categorySelect.addEventListener('change', populateItems);
+
+    /******** Cart ********/
+    document.getElementById('addItemBtn').addEventListener('click', ()=>{
+      const cat = categorySelect.value;
+      const idx = parseInt(itemSelect.value || 0, 10);
+      const qty = Math.max(1, parseInt(qtyInput.value || '1', 10));
+      const base = CATALOG[cat][idx];
+      if (!base) return;
+      const existing = cart.find(c => c.name === base.name);
+      if (existing) existing.qty += qty; else cart.push({ ...base, qty });
+      qtyInput.value = 1;
+      renderCart();
+      render();
+    });
+
+    function renderCart(){
+      if (cart.length === 0){
+        itemsEmpty.classList.remove('hidden');
+        itemsList.classList.add('hidden');
+        orderTotalCell.textContent = '₹0';
+        itemsTbody.innerHTML = '';
+        return;
+      }
+      itemsEmpty.classList.add('hidden');
+      itemsList.classList.remove('hidden');
+      itemsTbody.innerHTML = cart.map((it, i)=>{
+        const sub = it.price * it.qty;
+        return `<tr>
+          <td class="py-2">${it.name}</td>
+          <td class="py-2">
+            <div class="inline-flex items-center gap-2">
+              <button data-dec="${i}" class="px-2 py-1 rounded-lg border">-</button>
+              <span>${it.qty}</span>
+              <button data-inc="${i}" class="px-2 py-1 rounded-lg border">+</button>
+            </div>
+          </td>
+          <td class="py-2">${rupee.format(it.price).replace('₹\u00A0','')}</td>
+          <td class="py-2 font-medium">${rupee.format(sub).replace('₹\u00A0','')}</td>
+          <td class="py-2 text-right"><button data-del="${i}" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-600">Remove</button></td>
+        </tr>`
+      }).join('');
+      const total = cart.reduce((s,it)=>s+it.price*it.qty,0);
+      orderTotalCell.textContent = rupee.format(total).replace('₹\u00A0','');
+    }
+
+    itemsTbody.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const idx = parseInt(btn.getAttribute('data-inc') || btn.getAttribute('data-dec') || btn.getAttribute('data-del'));
+      if (btn.hasAttribute('data-inc')) cart[idx].qty += 1;
+      else if (btn.hasAttribute('data-dec')) { cart[idx].qty -= 1; if (cart[idx].qty <= 0) cart.splice(idx,1); }
+      else if (btn.hasAttribute('data-del')) cart.splice(idx,1);
+      renderCart();
+      render();
+    });
+
+    /******** Helpers ********/
+    function orderTotal(o){ return o.items.reduce((s,it)=>s+it.price*it.qty,0) }
+
+    function render(){
+      // Summary
+      const ready = orders.filter(o => o.status === STATUS.READY).length;
+      const pending = orders.filter(o => [STATUS.WAITING, STATUS.IN_PROGRESS].includes(o.status)).length;
+      const revenue = orders.filter(o => o.status !== STATUS.CANCELLED).reduce((s, o) => s + orderTotal(o), 0);
+      totalOrdersEl.textContent = orders.length;
+      readyCountEl.textContent = ready;
+      pendingCountEl.textContent = pending;
+      revenueEl.textContent = rupee.format(revenue).replace('₹\u00A0','');
+
+      // Alerts
+      renderAlerts();
+
+      // Assistant
+      renderAssistant();
+
+      // Orders Grid
+      renderOrders();
+    }
+
+    function renderAlerts(){
+      const alerts = [];
+      for (const o of orders){
+        const totalQty = o.items.reduce((s,it)=>s+it.qty,0);
+        if ([STATUS.WAITING, STATUS.IN_PROGRESS].includes(o.status) && minsSince(o.createdAt) > 10){
+          alerts.push({ type:'Long wait', severity:'amber', text:`${o.customer} waiting ${minsSince(o.createdAt)}m — consider prioritizing.` });
+        }
+        if (totalQty >= 6 && o.status !== STATUS.CANCELLED){
+          alerts.push({ type:'Large group', severity:'blue', text:`${o.customer} ordered ${totalQty} items — prep extra cups & pastry trays.` });
+        }
+        if (o.status === STATUS.CANCELLED){
+          alerts.push({ type:'Cancellation', severity:'rose', text:`${o.customer} order cancelled — review queue or payment issues.` });
+        }
+      }
+      alertCountEl.textContent = alerts.length;
+      if (!alerts.length){
+        alertsListEl.innerHTML = `<p class="text-sm text-slate-500">No alerts right now. You're all set ✅</p>`;
+        return;
+      }
+      alertsListEl.innerHTML = alerts.map(a => `
+        <div class="flex items-start gap-3 p-3 rounded-xl border ${a.severity==='amber'?'border-amber-200 bg-amber-50': a.severity==='rose'?'border-rose-200 bg-rose-50':'border-blue-200 bg-blue-50'}">
+          <span class="text-xs mt-0.5 px-2 py-1 rounded-full ${a.severity==='amber'?'bg-amber-100 text-amber-700': a.severity==='rose'?'bg-rose-100 text-rose-700':'bg-blue-100 text-blue-700'}">${a.type}</span>
+          <p class="text-sm">${a.text}</p>
+        </div>
+      `).join('');
+    }
+
+    function renderAssistant(){
+      const tips = [];
+      const counts = { croissant: 0, pastry:0, drink:0, snack:0 };
+      let cancels = 0; let waiting = 0; let inprog = 0;
+      for (const o of orders){
+        if (o.status === STATUS.CANCELLED) cancels++;
+        if (o.status === STATUS.WAITING) waiting++;
+        if (o.status === STATUS.IN_PROGRESS) inprog++;
+        for (const it of o.items){
+          const n = it.name.toLowerCase();
+          if (n.includes('croissant')) counts.croissant += it.qty;
+          counts[it.category] = (counts[it.category]||0) + it.qty;
+        }
+      }
+      const queue = waiting + inprog;
+      if (counts.croissant >= 8) tips.push(`Consider prepping more croissants — ${counts.croissant} in queue.`);
+      if (queue >= 10) tips.push(`High queue (${queue}). Reassign one barista to espresso-only station.`);
+      if (cancels >= 3) tips.push(`Noticing ${cancels} cancellations — check wait times & payment flow.`);
+      if (inprog > waiting && inprog > 4) tips.push(`Many orders in progress (${inprog}). Batch milk steaming to speed up.`);
+      if (!tips.length) tips.push('Everything looks balanced. Keep an eye on long-wait alerts.');
+      assistantTipsEl.innerHTML = tips.map(t=>`<li>${t}</li>`).join('');
+    }
+
+    /******** Orders Grid & Actions ********/
+    function renderOrders(){
+      const q = (searchInputEl.value || '').trim().toLowerCase();
+      const statusFilter = statusFilterEl.value;
+
+      const filtered = orders.filter(o => {
+        const matchStatus = statusFilter === 'all' || o.status === statusFilter;
+        const matchQuery = !q || o.customer.toLowerCase().includes(q) || o.items.some(it => it.name.toLowerCase().includes(q));
+        return matchStatus && matchQuery;
+      });
+
+      if (filtered.length === 0){
+        ordersGrid.innerHTML = `<div class="text-slate-500 text-sm">No matching orders.</div>`;
+        return;
+      }
+
+      ordersGrid.innerHTML = filtered.map(o=>{
+        const pillClass = o.status===STATUS.WAITING? 'bg-amber-100 text-amber-700' :
+                          o.status===STATUS.IN_PROGRESS? 'bg-blue-100 text-blue-700' :
+                          o.status===STATUS.READY? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
+        const total = rupee.format(orderTotal(o)).replace('₹\u00A0','');
+        return `<article class="bg-white rounded-2xl shadow-soft p-4 border border-slate-100">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-lg font-semibold">${o.customer}</h3>
+              <div class="mt-1 flex items-center gap-2">
+                <span class="text-xs px-2 py-1 rounded-full ${pillClass}">${o.status.replace('_',' ')}</span>
+                <span class="text-xs text-slate-400">${new Date(o.createdAt).toLocaleTimeString()}</span>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-sm text-slate-500">Payment</p>
+              <p class="font-semibold">${o.payment}</p>
+            </div>
+          </div>
+          <ul class="mt-3 space-y-1 text-sm">
+            ${o.items.map(it=>`<li class="flex justify-between"><span>${it.name} × ${it.qty}</span><span>${rupee.format(it.price*it.qty).replace('₹\u00A0','')}</span></li>`).join('')}
+          </ul>
+          <div class="mt-3 flex items-center justify-between">
+            <p class="text-sm text-slate-500">Total</p>
+            <p class="text-lg font-bold">${total}</p>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            ${o.status===STATUS.WAITING? `<button data-act="start" data-id="${o.id}" class="px-2 py-1 rounded-lg bg-blue-600 text-white text-sm">Start</button>`:''}
+            ${o.status===STATUS.IN_PROGRESS? `<button data-act="complete" data-id="${o.id}" class="px-2 py-1 rounded-lg bg-emerald-600 text-white text-sm">Complete</button>`:''}
+            <button data-act="cancel" data-id="${o.id}" class="px-2 py-1 rounded-lg bg-rose-600 text-white text-sm">Cancel</button>
+            ${(o.status===STATUS.CANCELLED || o.status===STATUS.READY)? `<button data-act="reopen" data-id="${o.id}" class="px-2 py-1 rounded-lg bg-slate-200 text-slate-800 text-sm">Reopen</button>`:''}
+          </div>
+        </article>`
+      }).join('');
+    }
+
+    document.getElementById('newOrderForm').addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const customer = document.getElementById('customerName').value.trim();
+      const payment = document.getElementById('paymentSelect').value;
+      if (!customer) return alert('Please enter customer name.');
+      if (cart.length === 0) return alert('Please add at least one item.');
+
+      const order = { id: uid(), customer, items: structuredClone(cart), status: STATUS.WAITING, payment, createdAt: now(), updatedAt: now() };
+      orders.unshift(order);
+      saveOrders(orders);
+
+      // Reset form
+      cart = [];
+      document.getElementById('newOrderForm').reset();
+      populateItems();
+      renderCart();
+      render();
+    });
+
+    ordersGrid.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      const id = btn.getAttribute('data-id');
+      const act = btn.getAttribute('data-act');
+      const idx = orders.findIndex(o=>o.id===id);
+      if (idx<0) return;
+      const o = orders[idx];
+      if (act==='start' && o.status===STATUS.WAITING) o.status = STATUS.IN_PROGRESS;
+      if (act==='complete' && o.status===STATUS.IN_PROGRESS) o.status = STATUS.READY;
+      if (act==='cancel') o.status = STATUS.CANCELLED;
+      if (act==='reopen') o.status = STATUS.WAITING;
+      o.updatedAt = now();
+      saveOrders(orders);
+      render();
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', ()=>{
+      if (!confirm('Clear all orders?')) return;
+      orders = [];
+      saveOrders(orders);
+      render();
+    });
+
+    /******** CSV Import ********/
+    document.getElementById('downloadSample').addEventListener('click', (e)=>{
+      e.preventDefault();
+      const sample = `customer,items,payment,status,createdAt\n`+
+        `Aarav,Latte x2; Croissant x1,UPI,waiting,\n`+
+        `Mira,Americano x1; Blueberry Muffin x2,Card,in_progress,\n`+
+        `Rohan,Mocha x1; Veg Sandwich x1,Cash,ready,`;
+      const blob = new Blob([sample], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'orders-sample.csv'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('importCsvBtn').addEventListener('click', ()=>{
+      const fileEl = document.getElementById('csvFile');
+      const msgEl = document.getElementById('csvImportMsg');
+      const file = fileEl.files && fileEl.files[0];
+      if (!file) { msgEl.textContent = 'Please choose a CSV file.'; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = reader.result;
+          const parsed = parseCSV(text);
+          let imported = 0, skipped = 0;
+          for (const row of parsed){
+            const o = csvRowToOrder(row);
+            if (!o) { skipped++; continue; }
+            orders.unshift(o); imported++;
+          }
+          saveOrders(orders);
+          render();
+          msgEl.textContent = `Imported ${imported} orders${skipped?`, skipped ${skipped}`:''}.`;
+          fileEl.value = '';
+        } catch (err){
+          console.error(err);
+          msgEl.textContent = 'Failed to parse CSV. Please check format.';
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    function parseCSV(text){
+      // Simple CSV parser (no quoted commas). Good for our sample format.
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length === 0) return [];
+      const headers = lines[0].split(',').map(h=>h.trim().toLowerCase());
+      const rows = [];
+      for (let i=1;i<lines.length;i++){
+        const cols = lines[i].split(',');
+        const row = {};
+        headers.forEach((h,idx)=> row[h] = (cols[idx]||'').trim());
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function csvRowToOrder(row){
+      const customer = row.customer?.trim();
+      const payment = (row.payment||'Cash').trim();
+      const status = (row.status||'waiting').toLowerCase();
+      if (!customer || !row.items) return null;
+
+      const items = [];
+      row.items.split(';').forEach(tok => {
+        if (!tok.trim()) return;
+        // accept formats: "Latte x2" or "Latte × 2"
+        const m = tok.trim().match(/^(.*?)(?:\s*[x×]\s*(\d+))?$/i);
+        if (!m) return;
+        const name = (m[1]||'').trim().toLowerCase();
+        const qty = Math.max(1, parseInt(m[2]||'1',10));
+        const base = NAME_LOOKUP.get(name);
+        if (base) items.push({ ...base, qty });
+      });
+      if (!items.length) return null;
+
+      const createdAt = row.createdat && row.createdat.trim() ? new Date(row.createdat).toISOString() : now();
+      const normStatus = ['waiting','in_progress','ready','cancelled'].includes(status) ? status : 'waiting';
+      return { id: uid(), customer, items, status: normStatus, payment, createdAt, updatedAt: now() };
+    }
+
+    // Search & filter
+    searchInputEl?.addEventListener('input', render);
+    statusFilterEl?.addEventListener('change', render);
+
+    // Initial render
+    renderCart();
+    render();
+  </script>
+</body>
+</html>
